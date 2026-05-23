@@ -1,0 +1,77 @@
+name: VER Heroic Scraper
+
+on:
+  schedule:
+    # Runs at 00:00 UTC every day.
+    - cron: '0 0 * * *'
+  # Allows manual runs for testing.
+  workflow_dispatch:
+
+jobs:
+  scrape-and-update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fetch latest stable release version
+        id: fetch
+        run: |
+          LATEST=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/Heroic-Games-Launcher/HeroicGamesLauncher/releases" \
+            | jq -r '[.[] | select(.prerelease == false and .draft == false and (.tag_name | test("beta"; "i") | not)) | .tag_name][0]' \
+            | sed 's/^v//')
+
+          echo "Latest stable version: $LATEST"
+          echo "version=$LATEST" >> $GITHUB_OUTPUT
+
+      - name: Update template version and tarball checksum
+        id: update
+        run: |
+          NEW_VER="${{ steps.fetch.outputs.version }}"
+          CURRENT_VER=$(grep '^version=' template | cut -d= -f2)
+
+          if [ "$NEW_VER" = "$CURRENT_VER" ]; then
+            echo "Already up to date ($CURRENT_VER). Nothing to do."
+            echo "changed=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          TARBALL_URL="https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/releases/download/v${NEW_VER}/Heroic-${NEW_VER}-linux-x64.tar.xz"
+          echo "Downloading tarball for checksum: $TARBALL_URL"
+          NEW_SHA256=$(curl -sL "$TARBALL_URL" | sha256sum | awk '{print $1}')
+
+          # Icon hash is the second space-separated entry — preserve it as-is
+          ICON_SHA256=$(grep '^checksum=' template | sed 's/checksum="[^ ]* //' | tr -d '"')
+
+          # Update version, revision, and swap only the tarball hash (first entry)
+          sed -i "s/^version=.*/version=${NEW_VER}/" template
+          sed -i "s/^revision=.*/revision=1/" template
+          sed -i "s/^checksum=\"[^ ]*/checksum=\"${NEW_SHA256}/" template
+
+          echo "Updated to $NEW_VER (tarball sha256: $NEW_SHA256, icon sha256: $ICON_SHA256)"
+          echo "changed=true" >> $GITHUB_OUTPUT
+
+      - name: Commit and Push Update
+        if: steps.update.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add template
+
+          NEW_VER=$(grep '^version=' template | cut -d= -f2)
+          git commit -m "chore(heroic): auto-update to $NEW_VER"
+
+          git push
+
+      - name: Trigger Build Pipeline
+        if: steps.update.outputs.changed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run build-xbps.yml --ref main
+          echo "Build workflow triggered successfully."

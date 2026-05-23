@@ -1,0 +1,77 @@
+name: Build Heroic XBPS
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'template'
+      - '.github/workflows/build-xbps.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install static XBPS tools (Ubuntu to Void Bridge)
+        run: |
+          wget https://repo-default.voidlinux.org/static/xbps-static-latest.x86_64-musl.tar.xz
+          sudo tar xf xbps-static-latest.x86_64-musl.tar.xz -C /
+          xbps-query -V
+
+      - name: Patch Ubuntu DNS for musl resolver
+        run: |
+          sudo rm -f /etc/resolv.conf
+          echo "nameserver 8.8.8.8" | sudo tee /etc/resolv.conf
+
+      - name: Disable AppArmor User Namespace Restriction (Ubuntu 24.04 fix)
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Clone void-packages
+        run: git clone https://github.com/void-linux/void-packages.git --depth 1
+
+      - name: Prepare void-packages environment
+        run: |
+          cd void-packages
+          ./xbps-src binary-bootstrap
+          echo "XBPS_ALLOW_RESTRICTED=yes" >> etc/conf
+
+      - name: Inject template
+        run: |
+          mkdir -p void-packages/srcpkgs/heroic
+          cp template void-packages/srcpkgs/heroic/template
+
+      - name: Build package
+        run: |
+          cd void-packages
+          ./xbps-src pkg heroic
+
+      - name: Get package version
+        run: |
+          PKGVER=$(grep '^version=' template | cut -d= -f2)
+          echo "PKGVER=${PKGVER}" >> $GITHUB_ENV
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.PKGVER }}
+          name: 'Heroic ${{ env.PKGVER }}'
+          make_latest: true
+          files: void-packages/hostdir/binpkgs/**/*.xbps
+
+      - name: Update Floating 'latest' Tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f latest
+          git push -f origin latest

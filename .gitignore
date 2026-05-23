@@ -1,0 +1,8 @@
+# xbps-src / build artifacts
+void-packages/
+*.xbps
+*.tar.xz
+*.tar.gz
+*.png
+workbench/
+

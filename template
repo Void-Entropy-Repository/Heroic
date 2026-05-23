@@ -1,0 +1,42 @@
+# Template file for 'heroic'
+pkgname=heroic
+version=2.22.0
+revision=1
+archs="x86_64"
+short_desc="Open Source GOG, Epic Games and Amazon Games launcher"
+maintainer="Shehata <shehataofficialmail@gmail.com>"
+license="GPL-3.0-only"
+homepage="https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher"
+distfiles="https://github.com/Heroic-Games-Launcher/HeroicGamesLauncher/releases/download/v${version}/Heroic-${version}-linux-x64.tar.xz https://raw.githubusercontent.com/Heroic-Games-Launcher/HeroicGamesLauncher/main/public/icon.png>heroic.png"
+checksum="0000000000000000000000000000000000000000000000000000000000000000 35cf28043bcb6e1d4cf290051403566a71914e176a5ce4045aba586003eb0dce"
+skip_extraction="heroic.png"
+wrksrc="Heroic-${version}-linux-x64"
+nostrip=yes
+
+depends="libnotify nss atk at-spi2-atk cups gtk+3 alsa-lib xdg-utils"
+
+do_install() {
+	vmkdir opt/heroic
+	vcopy "*" opt/heroic
+
+	vmkdir usr/bin
+	ln -sf /opt/heroic/heroic ${DESTDIR}/usr/bin/heroic
+
+	vmkdir usr/share/icons/hicolor/1024x1024/apps
+	vinstall ${XBPS_SRCDISTDIR}/${pkgname}-${version}/heroic.png 644 \
+		usr/share/icons/hicolor/1024x1024/apps heroic.png
+
+	# Desktop entry
+	vmkdir usr/share/applications
+	cat > ${DESTDIR}/usr/share/applications/heroic.desktop <<-DESKTOP
+	[Desktop Entry]
+	Type=Application
+	Name=Heroic Games Launcher
+	Icon=heroic
+	Exec=/opt/heroic/heroic %u
+	Terminal=false
+	Categories=Game;
+	MimeType=x-scheme-handler/heroic;
+	StartupWMClass=heroic
+	DESKTOP
+}
