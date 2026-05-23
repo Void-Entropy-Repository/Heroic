@@ -22,9 +22,9 @@ do_install() {
 	vmkdir usr/bin
 	ln -sf /opt/heroic/heroic ${DESTDIR}/usr/bin/heroic
 
-	vmkdir usr/share/icons/hicolor/1024x1024/apps
+	vmkdir usr/share/icons/hicolor/512x512/apps
 	vinstall ${XBPS_SRCDISTDIR}/${pkgname}-${version}/heroic.png 644 \
-		usr/share/icons/hicolor/1024x1024/apps heroic.png
+		usr/share/icons/hicolor/512x512/apps heroic.png
 
 	# Desktop entry
 	vmkdir usr/share/applications
@@ -33,7 +33,7 @@ do_install() {
 	Type=Application
 	Name=Heroic Games Launcher
 	Icon=heroic
-	Exec=/opt/heroic/heroic %u
+	Exec=heroic %u
 	Terminal=false
 	Categories=Game;
 	MimeType=x-scheme-handler/heroic;
